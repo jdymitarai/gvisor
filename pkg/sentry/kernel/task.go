@@ -854,6 +854,11 @@ func (t *Task) NewFDFrom(minFD int32, file *vfs.FileDescription, flags FDFlags) 
 	return t.fdTable.NewFD(t, minFD, file, flags)
 }
 
+// AllocFD allocates a new file descriptor for file in t's FD table.
+func (t *Task) AllocFD(file *vfs.FileDescription, closeOnExec bool) (int32, error) {
+	return t.NewFDFrom(0, file, FDFlags{CloseOnExec: closeOnExec})
+}
+
 // NewFDAt is a convenience wrapper for t.FDTable().NewFDAt.
 //
 // This automatically passes the task as the context.

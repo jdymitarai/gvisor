@@ -207,3 +207,12 @@ var (
 var (
 	FUSE_DEV_IOC_CLONE = IOR(229, 0, 4)
 )
+
+// Namespace ioctls from include/uapi/linux/nsfs.h.
+const (
+	NSIO             = 0xb7
+	NS_GET_USERNS    = 0x0000b701
+	NS_GET_PARENT    = 0x0000b702
+	NS_GET_NSTYPE    = 0x0000b703
+	NS_GET_OWNER_UID = 0x0000b704
+)

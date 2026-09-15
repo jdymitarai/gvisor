@@ -104,6 +104,16 @@ func (ns *UserNamespace) Root() *UserNamespace {
 	return ns
 }
 
+// Owner returns the effective UID of the creator of ns in the root namespace.
+func (ns *UserNamespace) Owner() KUID {
+	return ns.owner
+}
+
+// Parent returns the parent user namespace of ns.
+func (ns *UserNamespace) Parent() *UserNamespace {
+	return ns.parent
+}
+
 // Type implements vfs.Namespace.Type.
 func (ns *UserNamespace) Type() string {
 	return "user"
@@ -142,6 +152,13 @@ func (ns *UserNamespace) TryGetInode() refs.TryRefCounter {
 	if ns.inode == nil || !ns.inode.TryIncRef() {
 		return nil
 	}
+	return ns.inode
+}
+
+// GetInode returns ns's inode without incrementing refcount.
+func (ns *UserNamespace) GetInode() any {
+	ns.mu.Lock()
+	defer ns.mu.Unlock()
 	return ns.inode
 }
 

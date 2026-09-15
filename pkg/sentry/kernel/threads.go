@@ -271,6 +271,11 @@ func (ns *PIDNamespace) Type() string {
 	return "pid"
 }
 
+// Parent returns the parent PID namespace of ns.
+func (ns *PIDNamespace) Parent() *PIDNamespace {
+	return ns.parent
+}
+
 // NewChild returns a new, empty PID namespace that is a child of ns. Authority
 // over the new PID namespace is controlled by userns.
 func (ns *PIDNamespace) NewChild(ctx context.Context, k *Kernel, userns *auth.UserNamespace) *PIDNamespace {

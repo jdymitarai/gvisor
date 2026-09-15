@@ -333,6 +333,68 @@ TEST(SetnsTest, ChangeUserNamespaceRejectsMissingTargetCapability) {
               IsPosixErrorOkAndHolds(0));
 }
 
+#ifndef NSIO
+#define NSIO 0xb7
+#endif
+#ifndef NS_GET_USERNS
+#define NS_GET_USERNS _IO(NSIO, 0x1)
+#endif
+#ifndef NS_GET_PARENT
+#define NS_GET_PARENT _IO(NSIO, 0x2)
+#endif
+#ifndef NS_GET_NSTYPE
+#define NS_GET_NSTYPE _IO(NSIO, 0x3)
+#endif
+#ifndef NS_GET_OWNER_UID
+#define NS_GET_OWNER_UID _IO(NSIO, 0x4)
+#endif
+
+TEST(NsfsIoctlTest, GetNsType) {
+  const FileDescriptor mnt_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/mnt", O_RDONLY));
+  EXPECT_THAT(ioctl(mnt_ns.get(), NS_GET_NSTYPE), SyscallSucceedsWithValue(CLONE_NEWNS));
+
+  const FileDescriptor net_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/net", O_RDONLY));
+  EXPECT_THAT(ioctl(net_ns.get(), NS_GET_NSTYPE), SyscallSucceedsWithValue(CLONE_NEWNET));
+
+  const FileDescriptor pid_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/pid", O_RDONLY));
+  EXPECT_THAT(ioctl(pid_ns.get(), NS_GET_NSTYPE), SyscallSucceedsWithValue(CLONE_NEWPID));
+
+  const FileDescriptor user_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/user", O_RDONLY));
+  EXPECT_THAT(ioctl(user_ns.get(), NS_GET_NSTYPE), SyscallSucceedsWithValue(CLONE_NEWUSER));
+}
+
+TEST(NsfsIoctlTest, GetOwnerUid) {
+  const FileDescriptor user_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/user", O_RDONLY));
+  uid_t uid = static_cast<uid_t>(-1);
+  EXPECT_THAT(ioctl(user_ns.get(), NS_GET_OWNER_UID, &uid), SyscallSucceeds());
+  EXPECT_EQ(uid, 0);
+
+  const FileDescriptor mnt_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/mnt", O_RDONLY));
+  EXPECT_THAT(ioctl(mnt_ns.get(), NS_GET_OWNER_UID, &uid), SyscallFailsWithErrno(EINVAL));
+}
+
+TEST(NsfsIoctlTest, GetParentRootReturnsEperm) {
+  const FileDescriptor root_pid_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/pid", O_RDONLY));
+  EXPECT_THAT(ioctl(root_pid_ns.get(), NS_GET_PARENT), SyscallFailsWithErrno(EPERM));
+
+  const FileDescriptor root_user_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/user", O_RDONLY));
+  EXPECT_THAT(ioctl(root_user_ns.get(), NS_GET_PARENT), SyscallFailsWithErrno(EPERM));
+  EXPECT_THAT(ioctl(root_user_ns.get(), NS_GET_USERNS), SyscallFailsWithErrno(EPERM));
+
+  const FileDescriptor mnt_ns =
+      ASSERT_NO_ERRNO_AND_VALUE(Open("/proc/thread-self/ns/mnt", O_RDONLY));
+  EXPECT_THAT(ioctl(mnt_ns.get(), NS_GET_PARENT), SyscallFailsWithErrno(EINVAL));
+}
+
 }  // namespace
 }  // namespace testing
 }  // namespace gvisor
+
