@@ -691,6 +691,16 @@ func (fs *filesystem) unlinkAt(ctx context.Context, rp *vfs.ResolvingPath, dir b
 		if rp.MustBeDir() {
 			if child != nil {
 				vfsObj.AbortDeleteDentry(&child.vfsd) // +checklocksforce: see above.
+			} else {
+				// Child was not in cache. We must determine if it exists
+				// and whether it is a directory.
+				c, err := fs.getChildLocked(ctx, parent, name, &ds)
+				if err != nil {
+					return err
+				}
+				if c.isDir() {
+					return linuxerr.EISDIR
+				}
 			}
 			return linuxerr.ENOTDIR
 		}

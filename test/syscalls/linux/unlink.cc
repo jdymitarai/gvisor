@@ -141,6 +141,62 @@ TEST(UnlinkTest, AtBad) {
   ASSERT_THAT(close(dirfd), SyscallSucceeds());
 }
 
+TEST(UnlinkTest, TrailingSlash) {
+  auto dir = ASSERT_NO_ERRNO_AND_VALUE(TempPath::CreateDir());
+
+  // Nonexistent path with trailing slash must return ENOENT.
+  std::string nonexistent = JoinPath(dir.path(), "nonexistent/");
+  EXPECT_THAT(unlink(nonexistent.c_str()), SyscallFailsWithErrno(ENOENT));
+  // Repeated unlink tests negative dentry cache hit.
+  EXPECT_THAT(unlink(nonexistent.c_str()), SyscallFailsWithErrno(ENOENT));
+
+  int dirfd;
+  ASSERT_THAT(dirfd = open(dir.path().c_str(), O_DIRECTORY, 0),
+              SyscallSucceeds());
+  EXPECT_THAT(unlinkat(dirfd, "nonexistent/", 0),
+              SyscallFailsWithErrno(ENOENT));
+  EXPECT_THAT(unlinkat(dirfd, "nonexistent///", 0),
+              SyscallFailsWithErrno(ENOENT));
+
+  // Existing directory with trailing slash must return EISDIR.
+  std::string sub_dir = JoinPath(dir.path(), "sub_dir");
+  EXPECT_THAT(mkdir(sub_dir.c_str(), 0755), SyscallSucceeds());
+  std::string sub_dir_slash = JoinPath(dir.path(), "sub_dir/");
+  EXPECT_THAT(unlink(sub_dir_slash.c_str()), SyscallFailsWithErrno(EISDIR));
+  EXPECT_THAT(unlink((sub_dir + "///").c_str()), SyscallFailsWithErrno(EISDIR));
+  EXPECT_THAT(unlinkat(dirfd, "sub_dir/", 0), SyscallFailsWithErrno(EISDIR));
+
+  // Existing regular file with trailing slash must return ENOTDIR.
+  std::string file = JoinPath(dir.path(), "file");
+  int fd;
+  EXPECT_THAT(fd = open(file.c_str(), O_RDWR | O_CREAT, 0666),
+              SyscallSucceeds());
+  EXPECT_THAT(close(fd), SyscallSucceeds());
+  std::string file_slash = JoinPath(dir.path(), "file/");
+  EXPECT_THAT(unlink(file_slash.c_str()), SyscallFailsWithErrno(ENOTDIR));
+  EXPECT_THAT(unlink((file + "///").c_str()), SyscallFailsWithErrno(ENOTDIR));
+  EXPECT_THAT(unlinkat(dirfd, "file/", 0), SyscallFailsWithErrno(ENOTDIR));
+
+  // Symlinks with trailing slash must return ENOTDIR.
+  std::string sym_dir = JoinPath(dir.path(), "sym_dir");
+  EXPECT_THAT(symlink(sub_dir.c_str(), sym_dir.c_str()), SyscallSucceeds());
+  EXPECT_THAT(unlink((sym_dir + "/").c_str()), SyscallFailsWithErrno(ENOTDIR));
+  EXPECT_THAT(unlinkat(dirfd, "sym_dir/", 0), SyscallFailsWithErrno(ENOTDIR));
+
+  std::string sym_file = JoinPath(dir.path(), "sym_file");
+  EXPECT_THAT(symlink(file.c_str(), sym_file.c_str()), SyscallSucceeds());
+  EXPECT_THAT(unlink((sym_file + "/").c_str()), SyscallFailsWithErrno(ENOTDIR));
+  EXPECT_THAT(unlinkat(dirfd, "sym_file/", 0), SyscallFailsWithErrno(ENOTDIR));
+
+  std::string sym_dang = JoinPath(dir.path(), "sym_dang");
+  EXPECT_THAT(symlink(JoinPath(dir.path(), "missing").c_str(), sym_dang.c_str()),
+              SyscallSucceeds());
+  EXPECT_THAT(unlink((sym_dang + "/").c_str()), SyscallFailsWithErrno(ENOTDIR));
+  EXPECT_THAT(unlinkat(dirfd, "sym_dang/", 0), SyscallFailsWithErrno(ENOTDIR));
+
+  ASSERT_THAT(close(dirfd), SyscallSucceeds());
+}
+
 TEST(UnlinkTest, AbsTmpFile) {
   int fd;
   std::string path = JoinPath(GetAbsoluteTestTmpdir(), "ExistingFile");
